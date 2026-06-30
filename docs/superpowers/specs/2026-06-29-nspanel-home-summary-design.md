@@ -18,9 +18,10 @@ SONOFF NSPanel (nie Pro): ekran dotykowy landscape + 2 przyciski fizyczne na dol
 2 wbudowane przekaźniki.
 
 ### Decyzja architektoniczna
-**NSPanel Lovelace UI (Blackymas) — ESPHome + blueprint HA.**
-- Dojrzały projekt społeczności; konfiguracja przez blueprint w UI HA (bez AppDaemon).
-- Ekran spoczynkowy z zegarem/datą/pogodą wbudowany; strony kart encji + karty termostatu.
+**NSPanel Easy (`edwardtfn/NSPanel-Easy`) — ESPHome + blueprint HA.**
+- Aktualnie utrzymywany następca Blackymas `NSPanel_HA_Blueprint` (ten przeszedł w tryb utrzymaniowy — tylko krytyczne fixy). Ta sama filozofia: blueprint + ESPHome, w pełni lokalnie, bez AppDaemon. Framework ESP-IDF.
+- Konfiguracja przez blueprint w UI HA; ekran spoczynkowy z zegarem/datą/pogodą wbudowany; strony kart encji + karty termostatu.
+- Docs: https://edwardtfn.github.io/NSPanel-Easy/ · komponenty (ESPHome firmware + TFT + blueprint) trzymać na tej samej wersji.
 
 Odrzucone: **B) joBr99 + AppDaemon** (większa moc, ale dokłada utrzymanie AppDaemon —
 nadmiar do panelu-summary); **C) custom ESPHome (Nextion lambda) / Tasmota Berry**
@@ -85,8 +86,8 @@ o ile firmware wspiera).
 
 ## Definition of Done (checklista akceptacyjna)
 **Flash i łączność:**
-- [ ] NSPanel sflashowany (NSPanel Lovelace UI: ESPHome + TFT), bootuje, w HA online, czas/data OK.
-- [ ] Blueprint Blackymas zaimportowany i skonfigurowany.
+- [ ] NSPanel sflashowany (NSPanel Easy: ESPHome firmware + TFT), bootuje, w HA online, czas/data OK.
+- [ ] Blueprint NSPanel Easy zaimportowany i skonfigurowany (firmware/TFT/blueprint na tej samej wersji).
 
 **Ekran spoczynkowy:**
 - [ ] Zegar + data poprawne (strefa Europe/Warsaw).
@@ -113,3 +114,49 @@ o ile firmware wspiera).
 - Pełne sterowanie jasnością/kolorem świateł (tu tylko toggle on/off).
 - Bezpieczeństwo (alarm/zamki), sceny, sterowanie pozostałymi roletami z dotyku (poza 2 przyciskami).
 - Dopasowanie 1:1 do motywu Caule Black Rose (Nextion ma ograniczoną paletę; kolory per-encja OK).
+
+---
+
+## Implementacja (as-built, 2026-06-30)
+
+Wdrożone i działające. Sterowane blueprintem `edwardtfn/nspanel_easy_blueprint.yaml`
+przez automatyzację `automation.nspanel_salon` (inputy edytowane programowo przez MCP).
+
+**Firmware:** NSPanel Easy v2026.6.2 (ESPHome firmware + TFT 20.0 + blueprint, wszystko 2026.6.2).
+Urządzenie `nspanel-salon`, IP 192.168.1.51, WiFi `Czaja_IoT`.
+
+**Ekran spoczynkowy:** zegar/data + pogoda `weather.home` + temp z panelu
+(`indoortemp = sensor.nspanel_salon_temperature`). Temperatury pokoi i chipsy-żarówki
+**usunięte** (na życzenie — było nieczytelne). Outdoor temp z `weather.home`.
+
+**Home page — 4 kafle (custom buttons), żółty `[255,215,0]` gdy ON
+(`advanced_settings.icon_color_fallback_on`):**
+- `home_custom_button01` = `light.bedroom_lights` — „Bedroom", `mdi:bed`
+- `home_custom_button02` = `climate.bedroom_2` — „AC Bedroom", `mdi:air-conditioner`
+- `home_custom_button03` = `light.office_lights` — „Office", `mdi:desk-lamp`
+- `home_custom_button04` = `climate.office` — „AC Office", `mdi:air-conditioner`
+Kafle świateł = grupy „any-on": świecą żółto gdy jakiekolwiek światło w pokoju gra, tap = gasi całość.
+
+**Grupy świateł (helper `group`, group_type light, any-on):**
+- `light.bedroom_lights`: bedroom, shellybedroommain (MAIN), shellybedroomed (LED),
+  bedroom_bed2 (Bedroom Bed), hue_ambiance_spot_1 / _1_2 / _1_3 / _1_4. (pominięto BedroomTV Ambilight)
+- `light.office_lights`: shellyswitch25_3c6105e3695d_channel_1 (MAIN),
+  yeelight_strip6_0x13f31f78 (Desktop), hue_color_lamp_1 (Ball), sofalampikea, printerlamp.
+  (pominięto Bambu P1S — drukarka)
+- Źródło składu pokoi: `script.shortcut_office` / `script.shortcut_bedroom` (część świateł nie była otagowana do obszaru HA).
+
+**Przyciski fizyczne (relay decouple — `relay_X_local_fallback` OFF):**
+- Lewy „Kuchnia" → `cover.blind_tilt_ccd4` (SwitchBot, **tylko TILT**, supported_features 240).
+  Custom action toggle nachylenia metodą z `automation.ps5`:
+  tilt > 10 → `cover.set_cover_tilt_position` 0; inaczej → `cover.open_cover_tilt`.
+  (Zwykłe open/close NIE działa — ta żaluzja nie wspiera OPEN/CLOSE, tylko tilt.)
+- Prawy „Salon" → `cover.shadeslivingroom` (zwykły cover, supported_features 15, toggle).
+
+**Stosowanie zmian configu:** edycja inputów blueprintu wymaga `automation.reload` +
+`button.nspanel_salon_restart` (panel pobiera layout po reboot). Zmiana SKŁADU grup
+świateł nie wymaga restartu (encja `light.*_lights` ta sama).
+
+**Build/flash (gotchas — patrz też pamięć projektu):** VM HA na Proxmoxie miała 2 GB →
+OOM przy kompilacji (`Killed cc1plus`); podbito do ≥4 GB + `default_compile_process_limit: 1`.
+Pierwszy flash serial (USB-TTL 3.3V, IO0→GND) przez web.esphome.io; potem OTA + auto-TFT.
+Build robić przez LOKALNY adres HA (tunel Cloudflare ucinał WebSocket logu).
