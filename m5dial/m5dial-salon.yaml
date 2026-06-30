@@ -59,6 +59,17 @@ display:
     auto_clear_enabled: false
     update_interval: never
 
+font:
+  - file: "fonts/fa-solid-900.ttf"
+    id: fa_icons
+    size: 28
+    bpp: 4
+    glyphs:
+      - ""  # step-backward (prev)
+      - ""  # play
+      - ""  # pause
+      - ""  # step-forward (next)
+      - ""  # power-off
 image:
   - id: img_spotify
     file: images/spotify.png
@@ -160,15 +171,21 @@ sensor:
     id: ha_ac_target
     entity_id: climate.air_conditioner
     attribute: temperature
+    on_value:
+      - script.execute: update_climate
   - platform: homeassistant
     id: ha_ac_current
     entity_id: climate.air_conditioner
     attribute: current_temperature
+    on_value:
+      - script.execute: update_climate
   - platform: homeassistant
     id: ha_tado_target
     entity_id: climate.living_room
     attribute: temperature
 
+    on_value:
+      - script.execute: update_climate
 binary_sensor:
   - platform: gpio
     id: front_button
@@ -247,18 +264,26 @@ text_sensor:
   - platform: homeassistant
     id: ha_ac_state
     entity_id: climate.air_conditioner
+    on_value:
+      - script.execute: update_climate
   - platform: homeassistant
     id: ha_ac_fan
     entity_id: climate.air_conditioner
     attribute: fan_mode
+    on_value:
+      - script.execute: update_climate
   - platform: homeassistant
     id: ha_ac_swing
     entity_id: climate.air_conditioner
     attribute: swing_mode
+    on_value:
+      - script.execute: update_climate
   - platform: homeassistant
     id: ha_season
     entity_id: input_boolean.heating_season
 
+    on_value:
+      - script.execute: update_climate
 globals:
   - id: current_screen          # 0 = media, 1 = climate
     type: int
@@ -284,6 +309,7 @@ script:
       - lvgl.page.show: climate_page
       - lambda: 'id(current_screen) = 1;'
       - light.turn_on: { id: backlight, brightness: 100% }
+      - script.execute: update_climate
   - id: nav_toggle
     then:
       - if:
@@ -298,6 +324,49 @@ script:
     then:
       - delay: 15s
       - script.execute: nav_to_media
+  - id: update_climate
+    then:
+      - lambda: |-
+          bool winter = (id(ha_season).state == "on");
+          std::string st = id(ha_ac_state).state;
+          bool on = !(st == "off" || st == "unavailable" || st == "");
+          auto show = [](lv_obj_t* o, bool v){ if (v) lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN); };
+          lv_label_set_text(id(c_title), winter ? "Tado: Salon+Kuchnia" : "AC Salon");
+          if (winter) {
+            // Tado: single synced setpoint, hide AC-only controls
+            show(id(c_on_btn), false);
+            show(id(c_power_off), false);
+            show(id(c_fan_auto), false); show(id(c_fan_low), false);
+            show(id(c_fan_med), false); show(id(c_fan_high), false);
+            show(id(c_swing), false);
+            show(id(c_temp), true); show(id(c_current), false);
+            float t = id(ha_tado_target).has_state() ? id(ha_tado_target).state : -100.0f;
+            char b[16]; if (t > -50) snprintf(b,sizeof(b),"%.1f\xC2\xB0",t); else snprintf(b,sizeof(b),"-");
+            lv_label_set_text(id(c_temp), b);
+            return;
+          }
+          // summer / AC
+          show(id(c_on_btn), !on);
+          show(id(c_temp), on);
+          show(id(c_current), on);
+          show(id(c_power_off), on);
+          show(id(c_fan_auto), on); show(id(c_fan_low), on);
+          show(id(c_fan_med), on); show(id(c_fan_high), on);
+          show(id(c_swing), on);
+          if (on) {
+            float t = id(ha_ac_target).has_state() ? id(ha_ac_target).state : -100.0f;
+            char b[16]; if (t > -50) snprintf(b,sizeof(b),"%.1f\xC2\xB0",t); else snprintf(b,sizeof(b),"-");
+            lv_label_set_text(id(c_temp), b);
+            float cur = id(ha_ac_current).has_state() ? id(ha_ac_current).state : -100.0f;
+            char c[24]; if (cur > -50) snprintf(c,sizeof(c),"akt. %.1f\xC2\xB0",cur); else snprintf(c,sizeof(c)," ");
+            lv_label_set_text(id(c_current), c);
+            std::string fan = id(ha_ac_fan).state;
+            lv_obj_set_style_bg_color(id(c_fan_auto), lv_color_hex(fan=="nature"?0x185FA5:0x2C2C2C), 0);
+            lv_obj_set_style_bg_color(id(c_fan_low),  lv_color_hex(fan=="low"?0x185FA5:0x2C2C2C), 0);
+            lv_obj_set_style_bg_color(id(c_fan_med),  lv_color_hex(fan=="medium"?0x185FA5:0x2C2C2C), 0);
+            lv_obj_set_style_bg_color(id(c_fan_high), lv_color_hex(fan=="high"?0x185FA5:0x2C2C2C), 0);
+            lv_obj_set_style_bg_color(id(c_swing), lv_color_hex(id(ha_ac_swing).state=="on"?0x185FA5:0x2C2C2C), 0);
+          }
   - id: update_media
     then:
       - lambda: |-
@@ -563,7 +632,7 @@ lvgl:
                   data:
                     entity_id: media_player.denon_2
             widgets:
-              - label: { align: CENTER, text: "", text_font: montserrat_20 }
+              - label: { align: CENTER, text: "", text_font: fa_icons }
         - button:
             id: m_btn_play
             align: CENTER
@@ -580,7 +649,7 @@ lvgl:
               - logger.log: "btn PLAY touched"
               - script.execute: do_play_pause
             widgets:
-              - label: { id: m_play_icon, align: CENTER, text: "", text_font: montserrat_22 }
+              - label: { id: m_play_icon, align: CENTER, text: "", text_font: fa_icons }
         - button:
             id: m_btn_next
             align: CENTER
@@ -600,7 +669,7 @@ lvgl:
                   data:
                     entity_id: media_player.denon_2
             widgets:
-              - label: { align: CENTER, text: "", text_font: montserrat_20 }
+              - label: { align: CENTER, text: "", text_font: fa_icons }
         - arc:
             id: m_vol_arc
             align: CENTER
@@ -625,7 +694,92 @@ lvgl:
     - id: climate_page
       widgets:
         - label:
-            id: lbl_climate_placeholder
+            id: c_title
+            align: TOP_MID
+            y: 26
+            text: "AC Salon"
+            text_color: 0x9AA0A6
+        - label:
+            id: c_temp
             align: CENTER
-            text: "CLIMATE"
+            y: -18
+            text_font: montserrat_40
             text_color: 0xFFFFFF
+            text: "-"
+        - label:
+            id: c_current
+            align: CENTER
+            y: 22
+            text_color: 0x9AA0A6
+            text: ""
+        - button:
+            id: c_fan_auto
+            align: CENTER
+            x: -78
+            y: 60
+            width: 38
+            height: 28
+            bg_color: 0x2C2C2C
+            text_color: 0xFFFFFF
+            widgets: [ label: { align: CENTER, text: "auto" } ]
+        - button:
+            id: c_fan_low
+            align: CENTER
+            x: -36
+            y: 60
+            width: 38
+            height: 28
+            bg_color: 0x2C2C2C
+            text_color: 0xFFFFFF
+            widgets: [ label: { align: CENTER, text: "low" } ]
+        - button:
+            id: c_fan_med
+            align: CENTER
+            x: 6
+            y: 60
+            width: 38
+            height: 28
+            bg_color: 0x2C2C2C
+            text_color: 0xFFFFFF
+            widgets: [ label: { align: CENTER, text: "med" } ]
+        - button:
+            id: c_fan_high
+            align: CENTER
+            x: 48
+            y: 60
+            width: 38
+            height: 28
+            bg_color: 0x2C2C2C
+            text_color: 0xFFFFFF
+            widgets: [ label: { align: CENTER, text: "high" } ]
+        - button:
+            id: c_swing
+            align: CENTER
+            x: 0
+            y: 94
+            width: 80
+            height: 28
+            bg_color: 0x2C2C2C
+            text_color: 0xFFFFFF
+            widgets: [ label: { id: c_swing_lbl, align: CENTER, text: "swing" } ]
+        - button:
+            id: c_power_off
+            align: TOP_RIGHT
+            x: -28
+            y: 30
+            width: 38
+            height: 38
+            radius: 19
+            bg_color: 0xA32D2D
+            text_color: 0xFFFFFF
+            widgets: [ label: { align: CENTER, text: "", text_font: fa_icons } ]
+        - button:
+            id: c_on_btn
+            align: CENTER
+            width: 150
+            height: 150
+            radius: 75
+            bg_color: 0x185FA5
+            text_color: 0xFFFFFF
+            hidden: true
+            widgets: [ label: { align: CENTER, text: "", text_font: fa_icons } ]
