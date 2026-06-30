@@ -144,12 +144,26 @@ touchscreen:
       - logger.log:
           format: "touch x=%d y=%d"
           args: ["touch.x", "touch.y"]
-      - light.turn_on: { id: backlight, brightness: 100% }
-      - script.execute: backlight_idle
       - if:
-          condition: { lambda: 'return id(current_screen) != 0;' }
+          condition: { lambda: 'return !id(awake);' }
           then:
-            - script.execute: climate_idle_return   # any touch resets the 15s idle->media timer
+            # asleep: wake only. LVGL stays paused so this touch can't hit a widget;
+            # it resumes on release (finger up), swallowing the wake tap.
+            - light.turn_on: { id: backlight, brightness: 100% }
+            - lambda: 'id(awake) = true; id(waking) = true;'
+            - script.execute: backlight_idle
+          else:
+            - script.execute: backlight_idle
+            - if:
+                condition: { lambda: 'return id(current_screen) != 0;' }
+                then:
+                  - script.execute: climate_idle_return   # any touch resets the 15s idle->media timer
+    on_release:
+      - if:
+          condition: { lambda: 'return id(waking);' }
+          then:
+            - lvgl.resume:
+            - lambda: 'id(waking) = false;'
 
 sensor:
   - platform: rotary_encoder
@@ -158,8 +172,9 @@ sensor:
     pin_b: GPIO41
     on_clockwise:
       - light.turn_on: { id: backlight, brightness: 100% }
-      - script.execute: backlight_idle
       - lambda: |-
+          if (!id(awake)) { id(wake_now).execute(); return; }   // wake only, swallow this turn
+          id(backlight_idle).execute();
           if (id(current_screen) != 0) id(climate_idle_return).execute();  // turning the dial resets the idle timer
           if (id(current_screen) == 0) {
             float base = (id(pending_volume) >= 0) ? id(pending_volume)
@@ -190,8 +205,9 @@ sensor:
           }
     on_anticlockwise:
       - light.turn_on: { id: backlight, brightness: 100% }
-      - script.execute: backlight_idle
       - lambda: |-
+          if (!id(awake)) { id(wake_now).execute(); return; }   // wake only, swallow this turn
+          id(backlight_idle).execute();
           if (id(current_screen) != 0) id(climate_idle_return).execute();  // turning the dial resets the idle timer
           if (id(current_screen) == 0) {
             float base = (id(pending_volume) >= 0) ? id(pending_volume)
@@ -257,12 +273,16 @@ binary_sensor:
           - ON for at least 600ms
         then:
           - logger.log: "btn LONG"
-          - light.turn_on: { id: backlight, brightness: 100% }
-          - script.execute: backlight_idle
           - if:
-              condition: { lambda: 'return id(current_screen) == 0;' }
+              condition: { lambda: 'return !id(awake);' }
               then:
-                - script.execute: media_long
+                - script.execute: wake_now
+              else:
+                - script.execute: backlight_idle
+                - if:
+                    condition: { lambda: 'return id(current_screen) == 0;' }
+                    then:
+                      - script.execute: media_long
       - timing:
           - ON for at most 400ms
           - OFF for at most 400ms
@@ -270,25 +290,35 @@ binary_sensor:
           - OFF for at least 50ms
         then:
           - logger.log: "btn DOUBLE"
-          - script.execute: nav_toggle
           - if:
-              condition:
-                lambda: 'return id(current_screen) == 1;'
+              condition: { lambda: 'return !id(awake);' }
               then:
-                - script.execute: climate_idle_return
+                - script.execute: wake_now
               else:
-                - script.stop: climate_idle_return
+                - script.execute: backlight_idle
+                - script.execute: nav_toggle
+                - if:
+                    condition:
+                      lambda: 'return id(current_screen) == 1;'
+                    then:
+                      - script.execute: climate_idle_return
+                    else:
+                      - script.stop: climate_idle_return
       - timing:
           - ON for at most 400ms
           - OFF for at least 400ms
         then:
           - logger.log: "btn SINGLE"
-          - light.turn_on: { id: backlight, brightness: 100% }
-          - script.execute: backlight_idle
           - if:
-              condition: { lambda: 'return id(current_screen) == 0;' }
+              condition: { lambda: 'return !id(awake);' }
               then:
-                - script.execute: media_press
+                - script.execute: wake_now
+              else:
+                - script.execute: backlight_idle
+                - if:
+                    condition: { lambda: 'return id(current_screen) == 0;' }
+                    then:
+                      - script.execute: media_press
   - platform: status
     id: ha_link
     on_state:
@@ -373,6 +403,14 @@ globals:
     type: float
     restore_value: false
     initial_value: "-100"
+  - id: awake                   # false when the screen is off (asleep)
+    type: bool
+    restore_value: false
+    initial_value: "true"
+  - id: waking                  # a touch woke the screen; swallow it, resume LVGL on release
+    type: bool
+    restore_value: false
+    initial_value: "false"
 
 script:
   - id: backlight_idle          # screen fully off after 30s; any physical input wakes + restarts it
@@ -380,6 +418,14 @@ script:
     then:
       - delay: 30s
       - light.turn_off: backlight
+      - lvgl.pause:              # stop feeding touches to widgets while asleep
+      - lambda: 'id(awake) = false;'
+  - id: wake_now                # wake from dial/button: light up, resume LVGL, restart the timer
+    then:
+      - lvgl.resume:
+      - light.turn_on: { id: backlight, brightness: 100% }
+      - lambda: 'id(awake) = true;'
+      - script.execute: backlight_idle
   - id: nav_to_media
     then:
       - lvgl.page.show: media_page
