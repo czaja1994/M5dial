@@ -84,6 +84,7 @@ font:
       - ""  # swing vertical
       - ""  # swing horizontal
       - ""  # swing off (minus)
+      - ""  # offline warning
 image:
   - id: img_spotify
     file: images/spotify.png
@@ -281,6 +282,15 @@ binary_sensor:
               condition: { lambda: 'return id(current_screen) == 0;' }
               then:
                 - script.execute: media_press
+  - platform: status
+    id: ha_link
+    on_state:
+      - lambda: |-
+          auto show = [](lv_obj_t* o, bool v){ if (v) lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN); };
+          lv_label_set_text(id(m_offline), "\xEF\x81\xB1");
+          lv_label_set_text(id(c_offline), "\xEF\x81\xB1");
+          show(id(m_offline), !x);
+          show(id(c_offline), !x);
 
 text_sensor:
   - platform: homeassistant
@@ -681,6 +691,7 @@ lvgl:
   pages:
     - id: media_page
       widgets:
+        - label: { id: m_offline, align: BOTTOM_MID, y: -2, text_font: fa_small, text_color: 0xFFB300, text: "", hidden: true }
         - label:
             id: m_top
             align: TOP_MID
@@ -854,6 +865,7 @@ lvgl:
             text: "Vol -"
     - id: climate_page
       widgets:
+        - label: { id: c_offline, align: BOTTOM_MID, y: -2, text_font: fa_small, text_color: 0xFFB300, text: "", hidden: true }
         - label: { id: c_mode_icon, align: CENTER, x: -58, y: -52, text_font: fa_icons, text_color: 0x4FC3F7, text: "" }
         - button:
             id: c_power_off
