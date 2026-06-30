@@ -59,6 +59,45 @@ display:
     auto_clear_enabled: false
     update_interval: never
 
+image:
+  - id: img_spotify
+    file: images/spotify.png
+    type: RGB565
+    transparency: alpha_channel
+    resize: 36x37
+  - id: img_youtube
+    file: images/youtube.png
+    type: RGB565
+    transparency: alpha_channel
+  - id: img_netflix
+    file: images/netflix.png
+    type: RGB565
+    transparency: alpha_channel
+  - id: img_max
+    file: images/max.png
+    type: RGB565
+    transparency: alpha_channel
+  - id: img_disney
+    file: images/disney.png
+    type: RGB565
+    transparency: alpha_channel
+  - id: img_prime
+    file: images/prime.png
+    type: RGB565
+    transparency: alpha_channel
+  - id: img_ps5
+    file: images/playstation.png
+    type: RGB565
+    transparency: alpha_channel
+  - id: img_skyshowtime
+    file: images/skyshowtime.png
+    type: RGB565
+    transparency: alpha_channel
+  - id: img_plex
+    file: images/plex.png
+    type: RGB565
+    transparency: alpha_channel
+
 i2c:
   - id: internal_i2c
     sda: GPIO11
@@ -165,6 +204,9 @@ text_sensor:
     entity_id: media_player.apple_tv
     attribute: app_name
   - platform: homeassistant
+    id: ha_appletv_state
+    entity_id: media_player.apple_tv
+  - platform: homeassistant
     id: ha_ac_state
     entity_id: climate.air_conditioner
   - platform: homeassistant
@@ -218,6 +260,80 @@ script:
     then:
       - delay: 15s
       - script.execute: nav_to_media
+  - id: update_media
+    then:
+      - lambda: |-
+          std::string avr = id(ha_avr_state).state;
+          std::string source = id(ha_avr_source).state;
+          std::string heos = id(ha_heos_state).state;
+          bool off = (avr == "off" || avr == "unavailable" || avr.empty());
+          bool appletv = (source == "APPLE TV");
+          bool ps5 = (source == "PlayStation 5");
+          bool heos_active = (heos == "playing" || heos == "paused");
+          bool transport = heos_active && !off && !appletv && !ps5;
+          auto show = [](lv_obj_t* o, bool v){ if (v) lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN); };
+          show(id(m_top), true);
+          show(id(l_youtube), false); show(id(l_netflix), false); show(id(l_max), false);
+          show(id(l_disney), false); show(id(l_prime), false); show(id(l_ps5), false);
+          show(id(l_skyshowtime), false); show(id(l_plex), false);
+          show(id(m_spotify_logo), false);
+          show(id(m_btn_play), transport);
+          show(id(m_btn_prev), transport);
+          show(id(m_btn_next), transport);
+          bool textlogo = false;
+          bool titles = false;
+          if (off) {
+            lv_label_set_text(id(m_top), "Denon");
+            lv_label_set_text(id(m_logo), "DENON");
+            textlogo = true;
+          } else if (appletv) {
+            std::string app = id(ha_appletv_app).state;
+            std::string ast = id(ha_appletv_state).state;
+            bool aplaying = (ast == "playing" || ast == "paused");
+            lv_label_set_text(id(m_top), "Apple TV");
+            bool matched = false;
+            if (aplaying) {
+              if (app.find("YouTube") != std::string::npos) { show(id(l_youtube), true); matched = true; }
+              else if (app.find("HBO") != std::string::npos || app == "Max") { show(id(l_max), true); matched = true; }
+              else if (app.find("Netflix") != std::string::npos) { show(id(l_netflix), true); matched = true; }
+              else if (app.find("Disney") != std::string::npos) { show(id(l_disney), true); matched = true; }
+              else if (app.find("Prime") != std::string::npos) { show(id(l_prime), true); matched = true; }
+              else if (app.find("SkyShowtime") != std::string::npos) { show(id(l_skyshowtime), true); matched = true; }
+              else if (app.find("Plex") != std::string::npos) { show(id(l_plex), true); matched = true; }
+            }
+            if (!matched) { lv_label_set_text(id(m_logo), "Apple TV"); textlogo = true; }
+          } else if (ps5) {
+            lv_label_set_text(id(m_top), "PlayStation 5");
+            show(id(l_ps5), true);
+          } else if (heos_active) {
+            show(id(m_top), false);
+            show(id(m_spotify_logo), true);
+            lv_label_set_text(id(m_title), id(ha_media_title).state.c_str());
+            lv_label_set_text(id(m_artist), id(ha_media_artist).state.c_str());
+            lv_label_set_text(id(m_play_icon), heos == "playing" ? "" : "");
+            titles = true;
+          } else {
+            lv_label_set_text(id(m_top), source.c_str());
+            lv_label_set_text(id(m_title), "Nic nie gra");
+            lv_label_set_text(id(m_artist), "");
+            titles = true;
+          }
+          show(id(m_logo), textlogo);
+          show(id(m_title), titles);
+          show(id(m_artist), titles);
+          float v = id(ha_volume).has_state() ? id(ha_volume).state : -1.0f;
+          if (v >= 0) {
+            int pct = (int) roundf(v * 100.0f);
+            lv_arc_set_value(id(m_vol_arc), pct);
+            char buf[16]; snprintf(buf, sizeof(buf), "Vol %d%%", pct);
+            lv_label_set_text(id(m_vol_lbl), buf);
+          } else {
+            lv_label_set_text(id(m_vol_lbl), "Vol -");
+          }
+interval:
+  - interval: 1s
+    then:
+      - script.execute: update_media
 
 lvgl:
   displays:
@@ -235,10 +351,155 @@ lvgl:
     - id: media_page
       widgets:
         - label:
-            id: lbl_media_placeholder
+            id: m_top
+            align: TOP_MID
+            y: 24
+            text: "-"
+            text_color: 0x9AA0A6
+        - label:
+            id: m_title
             align: CENTER
-            text: "MEDIA"
+            y: -26
+            width: 200
+            long_mode: dot
+            text_align: CENTER
+            text_font: montserrat_20
             text_color: 0xFFFFFF
+            text: "-"
+        - label:
+            id: m_artist
+            align: CENTER
+            y: 6
+            width: 200
+            long_mode: dot
+            text_align: CENTER
+            text_color: 0xB0B5BA
+            text: ""
+        - label:
+            id: m_logo
+            align: CENTER
+            y: -8
+            text_font: montserrat_28
+            text_color: 0xFFFFFF
+            text: "DENON"
+            hidden: true
+        - image:
+            id: m_spotify_logo
+            align: TOP_MID
+            y: 18
+            src: img_spotify
+            hidden: true
+        - image:
+            id: l_youtube
+            align: CENTER
+            y: -6
+            src: img_youtube
+            hidden: true
+        - image:
+            id: l_netflix
+            align: CENTER
+            y: -6
+            src: img_netflix
+            hidden: true
+        - image:
+            id: l_max
+            align: CENTER
+            y: -6
+            src: img_max
+            hidden: true
+        - image:
+            id: l_disney
+            align: CENTER
+            y: -6
+            src: img_disney
+            hidden: true
+        - image:
+            id: l_prime
+            align: CENTER
+            y: -6
+            src: img_prime
+            hidden: true
+        - image:
+            id: l_ps5
+            align: CENTER
+            y: -6
+            src: img_ps5
+            hidden: true
+        - image:
+            id: l_skyshowtime
+            align: CENTER
+            y: -6
+            src: img_skyshowtime
+            hidden: true
+        - image:
+            id: l_plex
+            align: CENTER
+            y: -6
+            src: img_plex
+            hidden: true
+        - button:
+            id: m_btn_prev
+            align: CENTER
+            x: -52
+            y: 62
+            width: 36
+            height: 36
+            bg_opa: 0%
+            border_width: 0
+            shadow_width: 0
+            pad_all: 0
+            text_color: 0xFFFFFF
+            widgets:
+              - label: { align: CENTER, text: "", text_font: montserrat_20 }
+        - button:
+            id: m_btn_play
+            align: CENTER
+            x: 0
+            y: 62
+            width: 44
+            height: 44
+            bg_opa: 0%
+            border_width: 0
+            shadow_width: 0
+            pad_all: 0
+            text_color: 0xFFFFFF
+            widgets:
+              - label: { id: m_play_icon, align: CENTER, text: "", text_font: montserrat_22 }
+        - button:
+            id: m_btn_next
+            align: CENTER
+            x: 52
+            y: 62
+            width: 36
+            height: 36
+            bg_opa: 0%
+            border_width: 0
+            shadow_width: 0
+            pad_all: 0
+            text_color: 0xFFFFFF
+            widgets:
+              - label: { align: CENTER, text: "", text_font: montserrat_20 }
+        - arc:
+            id: m_vol_arc
+            align: CENTER
+            width: 232
+            height: 232
+            start_angle: 135
+            end_angle: 45
+            min_value: 0
+            max_value: 100
+            value: 0
+            arc_width: 6
+            arc_color: 0x202020
+            indicator:
+              arc_color: 0x1D9E75
+              arc_width: 6
+        - label:
+            id: m_vol_lbl
+            align: BOTTOM_MID
+            y: -6
+            text_color: 0xFFFFFF
+            text: "Vol -"
     - id: climate_page
       widgets:
         - label:
