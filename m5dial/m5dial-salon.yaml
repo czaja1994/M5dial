@@ -65,11 +65,25 @@ font:
     size: 28
     bpp: 4
     glyphs:
-      - ""  # step-backward (prev)
       - ""  # play
       - ""  # pause
-      - ""  # step-forward (next)
-      - ""  # power-off
+      - ""  # prev
+      - ""  # next
+      - ""  # power
+      - ""  # snowflake / cool
+      - ""  # fire / heat
+      - ""  # droplet / dry
+      - ""  # fan
+      - ""  # swing / move
+  - file: "fonts/fa-solid-900.ttf"
+    id: fa_small
+    size: 16
+    bpp: 4
+    glyphs:
+      - ""  # swing both (4-way)
+      - ""  # swing vertical
+      - ""  # swing horizontal
+      - ""  # swing off (minus)
 image:
   - id: img_spotify
     file: images/spotify.png
@@ -127,6 +141,11 @@ touchscreen:
       - logger.log:
           format: "touch x=%d y=%d"
           args: ["touch.x", "touch.y"]
+      - light.turn_on: { id: backlight, brightness: 100% }
+      - if:
+          condition: { lambda: 'return id(current_screen) != 0;' }
+          then:
+            - script.execute: climate_idle_return   # any touch resets the 15s idle->media timer
 
 sensor:
   - platform: rotary_encoder
@@ -135,34 +154,66 @@ sensor:
     pin_b: GPIO41
     on_clockwise:
       - light.turn_on: { id: backlight, brightness: 100% }
-      - if:
-          condition: { lambda: 'return id(current_screen) == 0;' }
-          then:
-            - lambda: |-
-                float base = (id(pending_volume) >= 0) ? id(pending_volume)
-                            : (id(ha_volume).has_state() ? id(ha_volume).state : 0.0f);
-                float v = base + 0.02f; if (v > 1.0f) v = 1.0f;
-                id(pending_volume) = v;
-                int pct = (int) roundf(v*100.0f);
-                lv_arc_set_value(id(m_vol_arc), pct);
-                char buf[16]; snprintf(buf,sizeof(buf),"Vol %d%%",pct);
-                lv_label_set_text(id(m_vol_lbl), buf);
-            - script.execute: volume_apply
+      - lambda: |-
+          if (id(current_screen) != 0) id(climate_idle_return).execute();  // turning the dial resets the idle timer
+          if (id(current_screen) == 0) {
+            float base = (id(pending_volume) >= 0) ? id(pending_volume)
+                        : (id(ha_volume).has_state() ? id(ha_volume).state : 0.0f);
+            float v = base + 0.02f; if (v > 1.0f) v = 1.0f;
+            id(pending_volume) = v;
+            int pct = (int) roundf(v*100.0f);
+            lv_arc_set_value(id(m_vol_arc), pct);
+            char b[16]; snprintf(b,sizeof(b),"Vol %d%%",pct);
+            lv_label_set_text(id(m_vol_lbl), b);
+            id(volume_apply).execute();
+          } else if (id(current_screen) == 1) {
+            bool winter = (id(ha_season).state == "on");
+            std::string st = id(ha_ac_state).state;
+            bool acoff = (st == "off" || st == "unavailable" || st == "");
+            if (winter || !acoff) {
+              float cur = winter ? (id(ha_tado_target).has_state() ? id(ha_tado_target).state : 20.0f)
+                                 : (id(ha_ac_target).has_state() ? id(ha_ac_target).state : 22.0f);
+              float base = (id(pending_temp) > -50.0f) ? id(pending_temp) : cur;
+              float t = base + 0.5f;
+              float lo = winter ? 5.0f : 18.0f, hi = winter ? 25.0f : 30.0f;
+              if (t < lo) t = lo; if (t > hi) t = hi;
+              id(pending_temp) = t;
+              char b[16]; snprintf(b,sizeof(b),"%.1f\xC2\xB0",t);
+              lv_label_set_text(id(c_temp), b);
+              id(temp_apply).execute();
+            }
+          }
     on_anticlockwise:
       - light.turn_on: { id: backlight, brightness: 100% }
-      - if:
-          condition: { lambda: 'return id(current_screen) == 0;' }
-          then:
-            - lambda: |-
-                float base = (id(pending_volume) >= 0) ? id(pending_volume)
-                            : (id(ha_volume).has_state() ? id(ha_volume).state : 0.0f);
-                float v = base - 0.02f; if (v < 0.0f) v = 0.0f;
-                id(pending_volume) = v;
-                int pct = (int) roundf(v*100.0f);
-                lv_arc_set_value(id(m_vol_arc), pct);
-                char buf[16]; snprintf(buf,sizeof(buf),"Vol %d%%",pct);
-                lv_label_set_text(id(m_vol_lbl), buf);
-            - script.execute: volume_apply
+      - lambda: |-
+          if (id(current_screen) != 0) id(climate_idle_return).execute();  // turning the dial resets the idle timer
+          if (id(current_screen) == 0) {
+            float base = (id(pending_volume) >= 0) ? id(pending_volume)
+                        : (id(ha_volume).has_state() ? id(ha_volume).state : 0.0f);
+            float v = base - 0.02f; if (v < 0.0f) v = 0.0f;
+            id(pending_volume) = v;
+            int pct = (int) roundf(v*100.0f);
+            lv_arc_set_value(id(m_vol_arc), pct);
+            char b[16]; snprintf(b,sizeof(b),"Vol %d%%",pct);
+            lv_label_set_text(id(m_vol_lbl), b);
+            id(volume_apply).execute();
+          } else if (id(current_screen) == 1) {
+            bool winter = (id(ha_season).state == "on");
+            std::string st = id(ha_ac_state).state;
+            bool acoff = (st == "off" || st == "unavailable" || st == "");
+            if (winter || !acoff) {
+              float cur = winter ? (id(ha_tado_target).has_state() ? id(ha_tado_target).state : 20.0f)
+                                 : (id(ha_ac_target).has_state() ? id(ha_ac_target).state : 22.0f);
+              float base = (id(pending_temp) > -50.0f) ? id(pending_temp) : cur;
+              float t = base - 0.5f;
+              float lo = winter ? 5.0f : 18.0f, hi = winter ? 25.0f : 30.0f;
+              if (t < lo) t = lo; if (t > hi) t = hi;
+              id(pending_temp) = t;
+              char b[16]; snprintf(b,sizeof(b),"%.1f\xC2\xB0",t);
+              lv_label_set_text(id(c_temp), b);
+              id(temp_apply).execute();
+            }
+          }
   - platform: homeassistant
     id: ha_volume
     entity_id: media_player.denon
@@ -272,16 +323,24 @@ text_sensor:
     attribute: fan_mode
     on_value:
       - script.execute: update_climate
+      - script.execute: update_fan_page
   - platform: homeassistant
     id: ha_ac_swing
     entity_id: climate.air_conditioner
     attribute: swing_mode
     on_value:
       - script.execute: update_climate
+      - script.execute: update_swing_page
+  - platform: homeassistant
+    id: ha_ac_swing_h
+    entity_id: climate.air_conditioner
+    attribute: swing_horizontal_mode
+    on_value:
+      - script.execute: update_climate
+      - script.execute: update_swing_page
   - platform: homeassistant
     id: ha_season
     entity_id: input_boolean.heating_season
-
     on_value:
       - script.execute: update_climate
 globals:
@@ -331,42 +390,144 @@ script:
           std::string st = id(ha_ac_state).state;
           bool on = !(st == "off" || st == "unavailable" || st == "");
           auto show = [](lv_obj_t* o, bool v){ if (v) lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN); };
-          lv_label_set_text(id(c_title), winter ? "Tado: Salon+Kuchnia" : "AC Salon");
+          const char* icon = "\xEF\x8B\x9C"; uint32_t mcol = 0x4FC3F7;
+          if (winter) { icon = "\xEF\x81\xAD"; mcol = 0xFF7A45; }
+          else if (st == "heat") { icon = "\xEF\x81\xAD"; mcol = 0xFF7A45; }
+          else if (st == "dry") { icon = "\xEF\x81\x83"; mcol = 0x9CCC65; }
+          else if (st == "fan_only") { icon = "\xEF\xA1\xA3"; mcol = 0xB0BEC5; }
+          lv_label_set_text(id(c_mode_icon), icon);
+          lv_obj_set_style_text_color(id(c_mode_icon), lv_color_hex(mcol), 0);
+          lv_label_set_text(id(c_fan_icon), "\xEF\xA1\xA3");
+          lv_label_set_text(id(c_swing_icon), "\xEF\x81\x87");
+          show(id(c_fan_a), false); show(id(c_fbar1), false); show(id(c_fbar2), false); show(id(c_fbar3), false);
+          show(id(c_swing_status), false);
           if (winter) {
-            // Tado: single synced setpoint, hide AC-only controls
-            show(id(c_on_btn), false);
-            show(id(c_power_off), false);
-            show(id(c_fan_auto), false); show(id(c_fan_low), false);
-            show(id(c_fan_med), false); show(id(c_fan_high), false);
-            show(id(c_swing), false);
-            show(id(c_temp), true); show(id(c_current), false);
-            float t = id(ha_tado_target).has_state() ? id(ha_tado_target).state : -100.0f;
-            char b[16]; if (t > -50) snprintf(b,sizeof(b),"%.1f\xC2\xB0",t); else snprintf(b,sizeof(b),"-");
+            show(id(c_on_btn), false); show(id(c_power_off), false);
+            show(id(c_fan_btn), false); show(id(c_swing_btn), false);
+            show(id(c_mode_icon), true); show(id(c_temp), true); show(id(c_current), true);
+            lv_label_set_text(id(c_current), "Tado: Salon + Kuchnia");
+            float disp;
+            if (id(pending_temp) > -50.0f) {
+              disp = id(pending_temp);
+              if (id(ha_tado_target).has_state() && fabsf(id(ha_tado_target).state - id(pending_temp)) < 0.25f) id(pending_temp) = -100.0f;
+            } else disp = id(ha_tado_target).has_state() ? id(ha_tado_target).state : -100.0f;
+            char b[16]; if (disp > -50) snprintf(b,sizeof(b),"%.1f\xC2\xB0",disp); else snprintf(b,sizeof(b),"-");
             lv_label_set_text(id(c_temp), b);
             return;
           }
-          // summer / AC
           show(id(c_on_btn), !on);
-          show(id(c_temp), on);
-          show(id(c_current), on);
-          show(id(c_power_off), on);
-          show(id(c_fan_auto), on); show(id(c_fan_low), on);
-          show(id(c_fan_med), on); show(id(c_fan_high), on);
-          show(id(c_swing), on);
+          show(id(c_mode_icon), on); show(id(c_temp), on); show(id(c_current), on);
+          show(id(c_power_off), on); show(id(c_fan_btn), on); show(id(c_swing_btn), on);
           if (on) {
-            float t = id(ha_ac_target).has_state() ? id(ha_ac_target).state : -100.0f;
-            char b[16]; if (t > -50) snprintf(b,sizeof(b),"%.1f\xC2\xB0",t); else snprintf(b,sizeof(b),"-");
+            float disp;
+            if (id(pending_temp) > -50.0f) {
+              disp = id(pending_temp);
+              if (id(ha_ac_target).has_state() && fabsf(id(ha_ac_target).state - id(pending_temp)) < 0.25f) id(pending_temp) = -100.0f;
+            } else disp = id(ha_ac_target).has_state() ? id(ha_ac_target).state : -100.0f;
+            char b[16]; if (disp > -50) snprintf(b,sizeof(b),"%.1f\xC2\xB0",disp); else snprintf(b,sizeof(b),"-");
             lv_label_set_text(id(c_temp), b);
             float cur = id(ha_ac_current).has_state() ? id(ha_ac_current).state : -100.0f;
             char c[24]; if (cur > -50) snprintf(c,sizeof(c),"akt. %.1f\xC2\xB0",cur); else snprintf(c,sizeof(c)," ");
             lv_label_set_text(id(c_current), c);
             std::string fan = id(ha_ac_fan).state;
-            lv_obj_set_style_bg_color(id(c_fan_auto), lv_color_hex(fan=="nature"?0x185FA5:0x2C2C2C), 0);
-            lv_obj_set_style_bg_color(id(c_fan_low),  lv_color_hex(fan=="low"?0x185FA5:0x2C2C2C), 0);
-            lv_obj_set_style_bg_color(id(c_fan_med),  lv_color_hex(fan=="medium"?0x185FA5:0x2C2C2C), 0);
-            lv_obj_set_style_bg_color(id(c_fan_high), lv_color_hex(fan=="high"?0x185FA5:0x2C2C2C), 0);
-            lv_obj_set_style_bg_color(id(c_swing), lv_color_hex(id(ha_ac_swing).state=="on"?0x185FA5:0x2C2C2C), 0);
+            int lvl = (fan == "low") ? 1 : (fan == "medium") ? 2 : (fan == "high") ? 3 : 0;
+            bool autof = (lvl == 0);
+            show(id(c_fan_a), autof);
+            show(id(c_fbar1), !autof); show(id(c_fbar2), !autof); show(id(c_fbar3), !autof);
+            uint32_t fon = 0x2E78E6, foff = 0x3A3F47;
+            lv_obj_set_style_bg_color(id(c_fbar1), lv_color_hex(lvl >= 1 ? fon : foff), 0);
+            lv_obj_set_style_bg_color(id(c_fbar2), lv_color_hex(lvl >= 2 ? fon : foff), 0);
+            lv_obj_set_style_bg_color(id(c_fbar3), lv_color_hex(lvl >= 3 ? fon : foff), 0);
+            bool sv = (id(ha_ac_swing).state == "on");
+            bool sh = (id(ha_ac_swing_h).state == "on");
+            const char* sg = "\xEF\x81\xA8";
+            if (sv && sh) sg = "\xEF\x81\x87";
+            else if (sv) sg = "\xEF\x81\xBD";
+            else if (sh) sg = "\xEF\x81\xBE";
+            show(id(c_swing_status), true);
+            lv_label_set_text(id(c_swing_status), sg);
+            lv_obj_set_style_text_color(id(c_swing_status), lv_color_hex((sv || sh) ? 0xFFFFFF : 0x4A4F57), 0);
           }
+  - id: temp_apply
+    mode: restart
+    then:
+      - delay: 200ms
+      - if:
+          condition: { lambda: 'return id(pending_temp) > -50.0f;' }
+          then:
+            - if:
+                condition: { lambda: 'return id(ha_season).state == "on";' }
+                then:
+                  - homeassistant.action:
+                      action: climate.set_temperature
+                      data:
+                        entity_id: climate.living_room
+                        temperature: !lambda 'return id(pending_temp);'
+                  - homeassistant.action:
+                      action: climate.set_temperature
+                      data:
+                        entity_id: climate.kitchen
+                        temperature: !lambda 'return id(pending_temp);'
+                else:
+                  - homeassistant.action:
+                      action: climate.set_temperature
+                      data:
+                        entity_id: climate.air_conditioner
+                        temperature: !lambda 'return id(pending_temp);'
+  - id: nav_to_fan
+    then:
+      - lambda: 'id(current_screen) = 2;'
+      - lvgl.page.show: fan_page
+      - light.turn_on: { id: backlight, brightness: 100% }
+      - script.execute: update_fan_page
+      - script.execute: climate_idle_return
+  - id: nav_to_swing
+    then:
+      - lambda: 'id(current_screen) = 3;'
+      - lvgl.page.show: swing_page
+      - light.turn_on: { id: backlight, brightness: 100% }
+      - script.execute: update_swing_page
+      - script.execute: climate_idle_return
+  - id: back_to_climate
+    then:
+      - lambda: 'id(current_screen) = 1;'
+      - lvgl.page.show: climate_page
+      - script.execute: update_climate
+      - script.execute: climate_idle_return
+  - id: update_fan_page
+    then:
+      - lambda: |-
+          std::string fan = id(ha_ac_fan).state;
+          auto col = [](lv_obj_t* o, bool a){ lv_obj_set_style_bg_color(o, lv_color_hex(a?0x2E78E6:0x1B1F26), 0); };
+          col(id(c_fb_auto), fan == "nature");
+          col(id(c_fb_low),  fan == "low");
+          col(id(c_fb_med),  fan == "medium");
+          col(id(c_fb_high), fan == "high");
+  - id: update_swing_page
+    then:
+      - lambda: |-
+          bool v = (id(ha_ac_swing).state == "on");
+          bool h = (id(ha_ac_swing_h).state == "on");
+          lv_obj_set_style_bg_color(id(c_sw_vert),  lv_color_hex(v?0x2E78E6:0x1B1F26), 0);
+          lv_obj_set_style_bg_color(id(c_sw_horiz), lv_color_hex(h?0x2E78E6:0x1B1F26), 0);
+          lv_label_set_text(id(c_sw_vert_lbl),  v ? "Pionowy: ON" : "Pionowy: OFF");
+          lv_label_set_text(id(c_sw_horiz_lbl), h ? "Poziomy: ON" : "Poziomy: OFF");
+  - id: toggle_swing_vert
+    then:
+      - script.execute: climate_idle_return
+      - homeassistant.action:
+          action: climate.set_swing_mode
+          data:
+            entity_id: climate.air_conditioner
+            swing_mode: !lambda 'return id(ha_ac_swing).state == "on" ? "off" : "on";'
+  - id: toggle_swing_horiz
+    then:
+      - script.execute: climate_idle_return
+      - homeassistant.action:
+          action: climate.set_swing_horizontal_mode
+          data:
+            entity_id: climate.air_conditioner
+            swing_horizontal_mode: !lambda 'return id(ha_ac_swing_h).state == "on" ? "off" : "on";'
   - id: update_media
     then:
       - lambda: |-
@@ -693,93 +854,179 @@ lvgl:
             text: "Vol -"
     - id: climate_page
       widgets:
-        - label:
-            id: c_title
-            align: TOP_MID
-            y: 26
-            text: "AC Salon"
-            text_color: 0x9AA0A6
-        - label:
-            id: c_temp
-            align: CENTER
-            y: -18
-            text_font: montserrat_40
-            text_color: 0xFFFFFF
-            text: "-"
-        - label:
-            id: c_current
-            align: CENTER
-            y: 22
-            text_color: 0x9AA0A6
-            text: ""
-        - button:
-            id: c_fan_auto
-            align: CENTER
-            x: -78
-            y: 60
-            width: 38
-            height: 28
-            bg_color: 0x2C2C2C
-            text_color: 0xFFFFFF
-            widgets: [ label: { align: CENTER, text: "auto" } ]
-        - button:
-            id: c_fan_low
-            align: CENTER
-            x: -36
-            y: 60
-            width: 38
-            height: 28
-            bg_color: 0x2C2C2C
-            text_color: 0xFFFFFF
-            widgets: [ label: { align: CENTER, text: "low" } ]
-        - button:
-            id: c_fan_med
-            align: CENTER
-            x: 6
-            y: 60
-            width: 38
-            height: 28
-            bg_color: 0x2C2C2C
-            text_color: 0xFFFFFF
-            widgets: [ label: { align: CENTER, text: "med" } ]
-        - button:
-            id: c_fan_high
-            align: CENTER
-            x: 48
-            y: 60
-            width: 38
-            height: 28
-            bg_color: 0x2C2C2C
-            text_color: 0xFFFFFF
-            widgets: [ label: { align: CENTER, text: "high" } ]
-        - button:
-            id: c_swing
-            align: CENTER
-            x: 0
-            y: 94
-            width: 80
-            height: 28
-            bg_color: 0x2C2C2C
-            text_color: 0xFFFFFF
-            widgets: [ label: { id: c_swing_lbl, align: CENTER, text: "swing" } ]
+        - label: { id: c_mode_icon, align: CENTER, x: -58, y: -52, text_font: fa_icons, text_color: 0x4FC3F7, text: "" }
         - button:
             id: c_power_off
-            align: TOP_RIGHT
-            x: -28
-            y: 30
-            width: 38
-            height: 38
-            radius: 19
-            bg_color: 0xA32D2D
+            align: CENTER
+            x: 58
+            y: -52
+            width: 34
+            height: 34
+            radius: 17
+            bg_color: 0xE24A3B
             text_color: 0xFFFFFF
             widgets: [ label: { align: CENTER, text: "", text_font: fa_icons } ]
+            on_click:
+              - homeassistant.action:
+                  action: climate.turn_off
+                  data:
+                    entity_id: climate.air_conditioner
+        - obj: { id: c_fbar1, align: CENTER, x: -23, y: -48, width: 5, height: 8, radius: 1, bg_color: 0x3A3F47, bg_opa: 100%, border_width: 0, pad_all: 0 }
+        - obj: { id: c_fbar2, align: CENTER, x: -16, y: -50, width: 5, height: 12, radius: 1, bg_color: 0x3A3F47, bg_opa: 100%, border_width: 0, pad_all: 0 }
+        - obj: { id: c_fbar3, align: CENTER, x: -9, y: -52, width: 5, height: 16, radius: 1, bg_color: 0x3A3F47, bg_opa: 100%, border_width: 0, pad_all: 0 }
+        - label: { id: c_fan_a, align: CENTER, x: -15, y: -50, text: "A", text_color: 0x4FC3F7, hidden: true }
+        - label: { id: c_swing_status, align: CENTER, x: 16, y: -50, text_font: fa_small, text_color: 0x4A4F57, text: "" }
+        - label: { id: c_temp, align: CENTER, y: -10, text_font: montserrat_40, text_color: 0xFFFFFF, text: "-" }
+        - label: { id: c_current, align: CENTER, y: 20, text_color: 0x7C848E, text: "" }
+        - button:
+            id: c_fan_btn
+            align: CENTER
+            x: -38
+            y: 50
+            width: 58
+            height: 34
+            radius: 17
+            bg_color: 0x1B1F26
+            text_color: 0xFFFFFF
+            widgets: [ label: { id: c_fan_icon, align: CENTER, text_font: fa_icons, text: "" } ]
+            on_click:
+              - script.execute: nav_to_fan
+        - button:
+            id: c_swing_btn
+            align: CENTER
+            x: 38
+            y: 50
+            width: 58
+            height: 34
+            radius: 17
+            bg_color: 0x1B1F26
+            text_color: 0xFFFFFF
+            widgets: [ label: { id: c_swing_icon, align: CENTER, text_font: fa_icons, text: "" } ]
+            on_click:
+              - script.execute: nav_to_swing
         - button:
             id: c_on_btn
             align: CENTER
-            width: 150
-            height: 150
-            radius: 75
-            bg_color: 0x185FA5
+            width: 120
+            height: 120
+            radius: 60
+            bg_color: 0x2E78E6
             text_color: 0xFFFFFF
             hidden: true
             widgets: [ label: { align: CENTER, text: "", text_font: fa_icons } ]
+            on_click:
+              - homeassistant.action:
+                  action: climate.set_hvac_mode
+                  data:
+                    entity_id: climate.air_conditioner
+                    hvac_mode: cool
+    - id: fan_page
+      widgets:
+        - label: { id: f_title, align: CENTER, y: -64, text: "Nawiew", text_color: 0x7C848E }
+        - button:
+            id: c_fb_auto
+            align: CENTER
+            y: -34
+            width: 128
+            height: 26
+            radius: 13
+            bg_color: 0x1B1F26
+            text_color: 0xFFFFFF
+            widgets: [ label: { align: CENTER, text: "Auto" } ]
+            on_click:
+              - homeassistant.action:
+                  action: climate.set_fan_mode
+                  data:
+                    entity_id: climate.air_conditioner
+                    fan_mode: nature
+              - script.execute: back_to_climate
+        - button:
+            id: c_fb_low
+            align: CENTER
+            y: -6
+            width: 128
+            height: 26
+            radius: 13
+            bg_color: 0x1B1F26
+            text_color: 0xFFFFFF
+            widgets: [ label: { align: CENTER, text: "Low" } ]
+            on_click:
+              - homeassistant.action:
+                  action: climate.set_fan_mode
+                  data:
+                    entity_id: climate.air_conditioner
+                    fan_mode: low
+              - script.execute: back_to_climate
+        - button:
+            id: c_fb_med
+            align: CENTER
+            y: 22
+            width: 128
+            height: 26
+            radius: 13
+            bg_color: 0x1B1F26
+            text_color: 0xFFFFFF
+            widgets: [ label: { align: CENTER, text: "Med" } ]
+            on_click:
+              - homeassistant.action:
+                  action: climate.set_fan_mode
+                  data:
+                    entity_id: climate.air_conditioner
+                    fan_mode: medium
+              - script.execute: back_to_climate
+        - button:
+            id: c_fb_high
+            align: CENTER
+            y: 50
+            width: 128
+            height: 26
+            radius: 13
+            bg_color: 0x1B1F26
+            text_color: 0xFFFFFF
+            widgets: [ label: { align: CENTER, text: "High" } ]
+            on_click:
+              - homeassistant.action:
+                  action: climate.set_fan_mode
+                  data:
+                    entity_id: climate.air_conditioner
+                    fan_mode: high
+              - script.execute: back_to_climate
+    - id: swing_page
+      widgets:
+        - label: { id: s_title, align: CENTER, y: -60, text: "Swing", text_color: 0x7C848E }
+        - button:
+            id: c_sw_vert
+            align: CENTER
+            y: -16
+            width: 150
+            height: 44
+            radius: 22
+            bg_color: 0x1B1F26
+            text_color: 0xFFFFFF
+            widgets: [ label: { id: c_sw_vert_lbl, align: CENTER, text: "Pionowy" } ]
+            on_click:
+              - script.execute: toggle_swing_vert
+        - button:
+            id: c_sw_horiz
+            align: CENTER
+            y: 30
+            width: 150
+            height: 44
+            radius: 22
+            bg_color: 0x1B1F26
+            text_color: 0xFFFFFF
+            widgets: [ label: { id: c_sw_horiz_lbl, align: CENTER, text: "Poziomy" } ]
+            on_click:
+              - script.execute: toggle_swing_horiz
+        - button:
+            id: s_back
+            align: CENTER
+            y: 70
+            width: 76
+            height: 26
+            radius: 13
+            bg_color: 0x2E78E6
+            text_color: 0xFFFFFF
+            widgets: [ label: { align: CENTER, text: "OK" } ]
+            on_click:
+              - script.execute: back_to_climate
