@@ -80,8 +80,10 @@ sensor:
     pin_a: GPIO40
     pin_b: GPIO41
     on_clockwise:
+      - light.turn_on: { id: backlight, brightness: 100% }
       - logger.log: "encoder CW"
     on_anticlockwise:
+      - light.turn_on: { id: backlight, brightness: 100% }
       - logger.log: "encoder CCW"
   - platform: homeassistant
     id: ha_volume
@@ -121,6 +123,14 @@ binary_sensor:
           - OFF for at least 50ms
         then:
           - logger.log: "btn DOUBLE"
+          - script.execute: nav_toggle
+          - if:
+              condition:
+                lambda: 'return id(current_screen) == 1;'
+              then:
+                - script.execute: climate_idle_return
+              else:
+                - script.stop: climate_idle_return
       - timing:
           - ON for at most 400ms
           - OFF for at least 400ms
@@ -183,17 +193,56 @@ globals:
     restore_value: false
     initial_value: "-100"
 
+script:
+  - id: nav_to_media
+    then:
+      - lvgl.page.show: media_page
+      - lambda: 'id(current_screen) = 0;'
+      - light.turn_on: { id: backlight, brightness: 100% }
+  - id: nav_to_climate
+    then:
+      - lvgl.page.show: climate_page
+      - lambda: 'id(current_screen) = 1;'
+      - light.turn_on: { id: backlight, brightness: 100% }
+  - id: nav_toggle
+    then:
+      - if:
+          condition:
+            lambda: 'return id(current_screen) == 0;'
+          then:
+            - script.execute: nav_to_climate
+          else:
+            - script.execute: nav_to_media
+  - id: climate_idle_return
+    mode: restart
+    then:
+      - delay: 15s
+      - script.execute: nav_to_media
+
 lvgl:
   displays:
     - round_display
   touchscreens:
     - my_touch
   bg_color: 0x000000
+  on_idle:
+    timeout: 60s
+    then:
+      - light.turn_on:
+          id: backlight
+          brightness: 20%
   pages:
     - id: media_page
       widgets:
         - label:
             id: lbl_media_placeholder
             align: CENTER
-            text: "M5Dial OK"
+            text: "MEDIA"
+            text_color: 0xFFFFFF
+    - id: climate_page
+      widgets:
+        - label:
+            id: lbl_climate_placeholder
+            align: CENTER
+            text: "CLIMATE"
             text_color: 0xFFFFFF
