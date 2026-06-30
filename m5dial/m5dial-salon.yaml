@@ -12,7 +12,7 @@ esp32:
     type: esp-idf
 
 logger:
-  level: INFO
+  level: DEBUG
 
 wifi:
   ssid: !secret wifi_ssid
@@ -59,9 +59,63 @@ display:
     auto_clear_enabled: false
     update_interval: never
 
+i2c:
+  - id: internal_i2c
+    sda: GPIO11
+    scl: GPIO12
+    scan: true
+
+touchscreen:
+  - platform: ft63x6
+    id: my_touch
+    i2c_id: internal_i2c
+    on_touch:
+      - logger.log:
+          format: "touch x=%d y=%d"
+          args: ["touch.x", "touch.y"]
+
+sensor:
+  - platform: rotary_encoder
+    id: encoder
+    pin_a: GPIO40
+    pin_b: GPIO41
+    on_clockwise:
+      - logger.log: "encoder CW"
+    on_anticlockwise:
+      - logger.log: "encoder CCW"
+
+binary_sensor:
+  - platform: gpio
+    id: front_button
+    pin:
+      number: GPIO42
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    on_multi_click:
+      - timing:
+          - ON for at least 600ms
+        then:
+          - logger.log: "btn LONG"
+      - timing:
+          - ON for at most 400ms
+          - OFF for at most 400ms
+          - ON for at most 400ms
+          - OFF for at least 50ms
+        then:
+          - logger.log: "btn DOUBLE"
+      - timing:
+          - ON for at most 400ms
+          - OFF for at least 400ms
+        then:
+          - logger.log: "btn SINGLE"
+
 lvgl:
   displays:
     - round_display
+  touchscreens:
+    - my_touch
   bg_color: 0x000000
   pages:
     - id: media_page
