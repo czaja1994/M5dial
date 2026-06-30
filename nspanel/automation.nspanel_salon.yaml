@@ -1,0 +1,69 @@
+# NSPanel Salon — blueprint automation (as-built export from HA)
+#
+# Source: automation.nspanel_salon  (HA instance 192.168.1.228)
+# Blueprint: edwardtfn/nspanel_easy_blueprint.yaml  (NSPanel Easy, 2026.6.2)
+# Exported: 2026-06-30
+#
+# To reproduce: import the NSPanel Easy blueprint, then create an automation
+# from it and paste these inputs (or drop this into automations via UI/MCP).
+# NOTE: `nspanel_name` is a device_id — re-point it to YOUR nspanel device.
+
+id: "1782826202411"
+alias: NSPanel Salon
+description: ""
+use_blueprint:
+  path: edwardtfn/nspanel_easy_blueprint.yaml
+  input:
+    nspanel_name: 5db51b2d312b23044bce118ff8b866ac   # device: nspanel-salon
+
+    # --- Screensaver / home ---
+    weather_entity: weather.home
+    indoortemp: sensor.nspanel_salon_temperature      # panel's own temp sensor
+    home_value01: []                                  # room temps removed (kept screen legible)
+    home_value02: []
+    chip01: []                                         # light chips removed
+    chip02: []
+    icon_color_fallback_on: [255, 215, 0]              # YELLOW when any state is ON
+
+    # --- Home page tiles (custom buttons) ---
+    home_custom_button01: light.bedroom_lights         # any-on group; tap toggles (off when on)
+    home_custom_button01_name: Bedroom
+    home_custom_button01_icon: mdi:bed
+    home_custom_button02: climate.bedroom_2            # AC Bedroom -> thermostat
+    home_custom_button02_name: AC Bedroom
+    home_custom_button02_icon: mdi:air-conditioner
+    home_custom_button03: light.office_lights
+    home_custom_button03_name: Office
+    home_custom_button03_icon: mdi:desk-lamp
+    home_custom_button04: climate.office              # AC Office -> thermostat
+    home_custom_button04_name: AC Office
+    home_custom_button04_icon: mdi:air-conditioner
+
+    # --- Hardware buttons (relay decoupled: relay_X_local_fallback left OFF) ---
+    # Right: living-room shades (normal cover, open/close toggle)
+    right_button_entity: cover.shadeslivingroom
+    right_button_name: Salon
+    right_button_state_entity: cover.shadeslivingroom
+    # Left: kitchen TILT blinds (cover.blind_tilt_ccd4 supports TILT only, sf=240).
+    # Custom action toggles tilt (method mirrored from automation.ps5):
+    #   tilt > 10  -> close (set_cover_tilt_position 0)
+    #   else       -> open  (open_cover_tilt)
+    left_button_entity: []
+    left_button_name: Kuchnia
+    left_button_state_entity: cover.blind_tilt_ccd4
+    left_button_click_custom_action:
+      - if:
+          - condition: numeric_state
+            entity_id: cover.blind_tilt_ccd4
+            attribute: current_tilt_position
+            above: 10
+        then:
+          - action: cover.set_cover_tilt_position
+            target:
+              entity_id: cover.blind_tilt_ccd4
+            data:
+              tilt_position: 0
+        else:
+          - action: cover.open_cover_tilt
+            target:
+              entity_id: cover.blind_tilt_ccd4

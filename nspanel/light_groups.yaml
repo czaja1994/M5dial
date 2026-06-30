@@ -1,0 +1,35 @@
+# NSPanel Salon — per-room light groups (as-built)
+#
+# Created as HA "Group" helpers (group_type: light, any-on semantics: the
+# group is ON if ANY member is on; toggling turns the whole room off/on).
+# These power the Bedroom/Office tiles on the panel (yellow when any light on,
+# tap = turn the whole room off).
+#
+# Helpers are config-entry based (not configuration.yaml). Recreate via:
+#   Settings -> Devices & Services -> Helpers -> Create Helper -> Group -> Light
+# or via MCP ha_config_set_helper(helper_type="group",
+#   config={"group_type":"light","hide_members":false,"entities":[...]})
+#
+# Membership sourced from HA areas + script.shortcut_bedroom / script.shortcut_office
+# (some lights were not area-tagged, so the scripts were the authoritative list).
+
+light.bedroom_lights:           # entry_id 01KWCCZ71416APQ74RYNW2NDPD
+  entities:
+    - light.bedroom
+    - light.shellybedroommain          # MAIN
+    - light.shellybedroomed            # LED
+    - light.bedroom_bed2               # Bedroom Bed
+    - light.hue_ambiance_spot_1        # bed spots
+    - light.hue_ambiance_spot_1_2
+    - light.hue_ambiance_spot_1_3
+    - light.hue_ambiance_spot_1_4
+  # excluded: light.50pus7855_12_ambilight (BedroomTV ambilight)
+
+light.office_lights:            # entry_id 01KWCCZGG2723FCA1QWBBCN76Z
+  entities:
+    - light.shellyswitch25_3c6105e3695d_channel_1   # MAIN
+    - light.yeelight_strip6_0x13f31f78              # Desktop strip
+    - light.hue_color_lamp_1                        # Ball
+    - light.sofalampikea
+    - light.printerlamp
+  # excluded: light.bambu_p1s_chamber_light (3D printer)
