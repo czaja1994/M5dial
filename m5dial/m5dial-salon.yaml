@@ -29,3 +29,45 @@ ota:
 time:
   - platform: homeassistant
     id: ha_time
+
+spi:
+  id: spi_bus
+  mosi_pin: GPIO5
+  clk_pin: GPIO6
+
+output:
+  - platform: ledc
+    pin: GPIO9
+    id: backlight_output
+
+light:
+  - platform: monochromatic
+    output: backlight_output
+    id: backlight
+    name: Backlight
+    restore_mode: ALWAYS_ON
+    default_transition_length: 250ms
+
+display:
+  - platform: ili9xxx
+    id: round_display
+    model: GC9A01A
+    cs_pin: GPIO7
+    dc_pin: GPIO4
+    reset_pin: GPIO8
+    invert_colors: true
+    auto_clear_enabled: false
+    update_interval: never
+
+lvgl:
+  displays:
+    - round_display
+  bg_color: 0x000000
+  pages:
+    - id: media_page
+      widgets:
+        - label:
+            id: lbl_media_placeholder
+            align: CENTER
+            text: "M5Dial OK"
+            text_color: 0xFFFFFF
