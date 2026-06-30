@@ -5,6 +5,8 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
+  on_boot:
+    - script.execute: backlight_idle
 
 esp32:
   variant: esp32s3
@@ -143,6 +145,7 @@ touchscreen:
           format: "touch x=%d y=%d"
           args: ["touch.x", "touch.y"]
       - light.turn_on: { id: backlight, brightness: 100% }
+      - script.execute: backlight_idle
       - if:
           condition: { lambda: 'return id(current_screen) != 0;' }
           then:
@@ -155,6 +158,7 @@ sensor:
     pin_b: GPIO41
     on_clockwise:
       - light.turn_on: { id: backlight, brightness: 100% }
+      - script.execute: backlight_idle
       - lambda: |-
           if (id(current_screen) != 0) id(climate_idle_return).execute();  // turning the dial resets the idle timer
           if (id(current_screen) == 0) {
@@ -186,6 +190,7 @@ sensor:
           }
     on_anticlockwise:
       - light.turn_on: { id: backlight, brightness: 100% }
+      - script.execute: backlight_idle
       - lambda: |-
           if (id(current_screen) != 0) id(climate_idle_return).execute();  // turning the dial resets the idle timer
           if (id(current_screen) == 0) {
@@ -253,6 +258,7 @@ binary_sensor:
         then:
           - logger.log: "btn LONG"
           - light.turn_on: { id: backlight, brightness: 100% }
+          - script.execute: backlight_idle
           - if:
               condition: { lambda: 'return id(current_screen) == 0;' }
               then:
@@ -278,6 +284,7 @@ binary_sensor:
         then:
           - logger.log: "btn SINGLE"
           - light.turn_on: { id: backlight, brightness: 100% }
+          - script.execute: backlight_idle
           - if:
               condition: { lambda: 'return id(current_screen) == 0;' }
               then:
@@ -368,16 +375,23 @@ globals:
     initial_value: "-100"
 
 script:
+  - id: backlight_idle          # screen fully off after 30s; any physical input wakes + restarts it
+    mode: restart
+    then:
+      - delay: 30s
+      - light.turn_off: backlight
   - id: nav_to_media
     then:
       - lvgl.page.show: media_page
       - lambda: 'id(current_screen) = 0;'
       - light.turn_on: { id: backlight, brightness: 100% }
+      - script.execute: backlight_idle
   - id: nav_to_climate
     then:
       - lvgl.page.show: climate_page
       - lambda: 'id(current_screen) = 1;'
       - light.turn_on: { id: backlight, brightness: 100% }
+      - script.execute: backlight_idle
       - script.execute: update_climate
   - id: nav_toggle
     then:
@@ -489,6 +503,7 @@ script:
       - lambda: 'id(current_screen) = 2;'
       - lvgl.page.show: fan_page
       - light.turn_on: { id: backlight, brightness: 100% }
+      - script.execute: backlight_idle
       - script.execute: update_fan_page
       - script.execute: climate_idle_return
   - id: nav_to_swing
@@ -496,6 +511,7 @@ script:
       - lambda: 'id(current_screen) = 3;'
       - lvgl.page.show: swing_page
       - light.turn_on: { id: backlight, brightness: 100% }
+      - script.execute: backlight_idle
       - script.execute: update_swing_page
       - script.execute: climate_idle_return
   - id: back_to_climate
@@ -682,12 +698,6 @@ lvgl:
   touchscreens:
     - my_touch
   bg_color: 0x000000
-  on_idle:
-    timeout: 60s
-    then:
-      - light.turn_on:
-          id: backlight
-          brightness: 20%
   pages:
     - id: media_page
       widgets:
