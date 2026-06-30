@@ -74,7 +74,7 @@ image:
     type: RGB565
     transparency: alpha_channel
   - id: img_max
-    file: images/max.png
+    file: images/hbomax.png
     type: RGB565
     transparency: alpha_channel
   - id: img_disney
@@ -95,6 +95,10 @@ image:
     transparency: alpha_channel
   - id: img_plex
     file: images/plex.png
+    type: RGB565
+    transparency: alpha_channel
+  - id: img_appletv
+    file: images/appletv.png
     type: RGB565
     transparency: alpha_channel
 
@@ -120,10 +124,34 @@ sensor:
     pin_b: GPIO41
     on_clockwise:
       - light.turn_on: { id: backlight, brightness: 100% }
-      - logger.log: "encoder CW"
+      - if:
+          condition: { lambda: 'return id(current_screen) == 0;' }
+          then:
+            - lambda: |-
+                float base = (id(pending_volume) >= 0) ? id(pending_volume)
+                            : (id(ha_volume).has_state() ? id(ha_volume).state : 0.0f);
+                float v = base + 0.02f; if (v > 1.0f) v = 1.0f;
+                id(pending_volume) = v;
+                int pct = (int) roundf(v*100.0f);
+                lv_arc_set_value(id(m_vol_arc), pct);
+                char buf[16]; snprintf(buf,sizeof(buf),"Vol %d%%",pct);
+                lv_label_set_text(id(m_vol_lbl), buf);
+            - script.execute: volume_apply
     on_anticlockwise:
       - light.turn_on: { id: backlight, brightness: 100% }
-      - logger.log: "encoder CCW"
+      - if:
+          condition: { lambda: 'return id(current_screen) == 0;' }
+          then:
+            - lambda: |-
+                float base = (id(pending_volume) >= 0) ? id(pending_volume)
+                            : (id(ha_volume).has_state() ? id(ha_volume).state : 0.0f);
+                float v = base - 0.02f; if (v < 0.0f) v = 0.0f;
+                id(pending_volume) = v;
+                int pct = (int) roundf(v*100.0f);
+                lv_arc_set_value(id(m_vol_arc), pct);
+                char buf[16]; snprintf(buf,sizeof(buf),"Vol %d%%",pct);
+                lv_label_set_text(id(m_vol_lbl), buf);
+            - script.execute: volume_apply
   - platform: homeassistant
     id: ha_volume
     entity_id: media_player.denon
@@ -155,6 +183,11 @@ binary_sensor:
           - ON for at least 600ms
         then:
           - logger.log: "btn LONG"
+          - light.turn_on: { id: backlight, brightness: 100% }
+          - if:
+              condition: { lambda: 'return id(current_screen) == 0;' }
+              then:
+                - script.execute: media_long
       - timing:
           - ON for at most 400ms
           - OFF for at most 400ms
@@ -175,6 +208,11 @@ binary_sensor:
           - OFF for at least 400ms
         then:
           - logger.log: "btn SINGLE"
+          - light.turn_on: { id: backlight, brightness: 100% }
+          - if:
+              condition: { lambda: 'return id(current_screen) == 0;' }
+              then:
+                - script.execute: media_press
 
 text_sensor:
   - platform: homeassistant
@@ -266,26 +304,29 @@ script:
           std::string avr = id(ha_avr_state).state;
           std::string source = id(ha_avr_source).state;
           std::string heos = id(ha_heos_state).state;
-          bool off = (avr == "off" || avr == "unavailable" || avr.empty());
-          bool appletv = (source == "APPLE TV");
-          bool ps5 = (source == "PlayStation 5");
-          bool heos_active = (heos == "playing" || heos == "paused");
-          bool transport = heos_active && !off && !appletv && !ps5;
+          bool avr_on = !(avr == "off" || avr == "unavailable" || avr.empty());
+          bool heos_active = (heos == "playing" || heos == "paused" || heos == "buffering");
+          bool appletv = avr_on && (source == "APPLE TV");
+          bool ps5 = avr_on && (source == "PlayStation 5");
           auto show = [](lv_obj_t* o, bool v){ if (v) lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN); };
           show(id(m_top), true);
           show(id(l_youtube), false); show(id(l_netflix), false); show(id(l_max), false);
           show(id(l_disney), false); show(id(l_prime), false); show(id(l_ps5), false);
           show(id(l_skyshowtime), false); show(id(l_plex), false);
+          show(id(l_appletv), false);
           show(id(m_spotify_logo), false);
-          show(id(m_btn_play), transport);
-          show(id(m_btn_prev), transport);
-          show(id(m_btn_next), transport);
+          show(id(m_btn_play), heos_active);
+          show(id(m_btn_prev), heos_active);
+          show(id(m_btn_next), heos_active);
           bool textlogo = false;
           bool titles = false;
-          if (off) {
-            lv_label_set_text(id(m_top), "Denon");
-            lv_label_set_text(id(m_logo), "DENON");
-            textlogo = true;
+          if (heos_active) {
+            show(id(m_top), false);
+            show(id(m_spotify_logo), true);
+            lv_label_set_text(id(m_title), id(ha_media_title).state.c_str());
+            lv_label_set_text(id(m_artist), id(ha_media_artist).state.c_str());
+            lv_label_set_text(id(m_play_icon), heos == "playing" ? "" : "");
+            titles = true;
           } else if (appletv) {
             std::string app = id(ha_appletv_app).state;
             std::string ast = id(ha_appletv_state).state;
@@ -301,35 +342,95 @@ script:
               else if (app.find("SkyShowtime") != std::string::npos) { show(id(l_skyshowtime), true); matched = true; }
               else if (app.find("Plex") != std::string::npos) { show(id(l_plex), true); matched = true; }
             }
-            if (!matched) { lv_label_set_text(id(m_logo), "Apple TV"); textlogo = true; }
+            if (!matched) { show(id(l_appletv), true); }
           } else if (ps5) {
             lv_label_set_text(id(m_top), "PlayStation 5");
             show(id(l_ps5), true);
-          } else if (heos_active) {
-            show(id(m_top), false);
-            show(id(m_spotify_logo), true);
-            lv_label_set_text(id(m_title), id(ha_media_title).state.c_str());
-            lv_label_set_text(id(m_artist), id(ha_media_artist).state.c_str());
-            lv_label_set_text(id(m_play_icon), heos == "playing" ? "" : "");
-            titles = true;
           } else {
-            lv_label_set_text(id(m_top), source.c_str());
-            lv_label_set_text(id(m_title), "Nic nie gra");
-            lv_label_set_text(id(m_artist), "");
-            titles = true;
+            lv_label_set_text(id(m_top), "Denon");
+            lv_label_set_text(id(m_logo), "DENON");
+            textlogo = true;
           }
           show(id(m_logo), textlogo);
           show(id(m_title), titles);
           show(id(m_artist), titles);
-          float v = id(ha_volume).has_state() ? id(ha_volume).state : -1.0f;
-          if (v >= 0) {
-            int pct = (int) roundf(v * 100.0f);
+          float disp = -1.0f;
+          if (id(pending_volume) >= 0) {
+            disp = id(pending_volume);
+            if (id(ha_volume).has_state() && fabsf(id(ha_volume).state - id(pending_volume)) < 0.015f) {
+              id(pending_volume) = -1;
+            }
+          } else if (id(ha_volume).has_state()) {
+            disp = id(ha_volume).state;
+          }
+          if (disp >= 0) {
+            int pct = (int) roundf(disp * 100.0f);
             lv_arc_set_value(id(m_vol_arc), pct);
             char buf[16]; snprintf(buf, sizeof(buf), "Vol %d%%", pct);
             lv_label_set_text(id(m_vol_lbl), buf);
           } else {
             lv_label_set_text(id(m_vol_lbl), "Vol -");
           }
+  - id: volume_apply
+    mode: restart
+    then:
+      - delay: 150ms
+      - if:
+          condition: { lambda: 'return id(pending_volume) >= 0;' }
+          then:
+            - homeassistant.action:
+                action: media_player.volume_set
+                data:
+                  entity_id: media_player.denon
+                  volume_level: !lambda 'return id(pending_volume);'
+      # pending_volume is cleared by update_media once ha_volume reflects the new value,
+      # so the arc holds the target instead of snapping back to the stale reading.
+  - id: media_press
+    then:
+      - lambda: |-
+          std::string avr = id(ha_avr_state).state;
+          std::string source = id(ha_avr_source).state;
+          std::string heos = id(ha_heos_state).state;
+          bool avr_on = !(avr == "off" || avr == "unavailable" || avr.empty());
+          bool heos_active = (heos == "playing" || heos == "paused" || heos == "buffering");
+          bool busy_video = avr_on && (source == "APPLE TV" || source == "PlayStation 5");
+          ESP_LOGD("m5dial", "media_press avr=%s heos=%s src=%s -> %s",
+                   avr.c_str(), heos.c_str(), source.c_str(),
+                   heos_active ? "play_pause" : (busy_video ? "ignore" : "resume"));
+          if (heos_active) { id(do_play_pause).execute(); }
+          else if (!busy_video) { id(do_resume).execute(); }
+  - id: do_resume
+    then:
+      - logger.log: "do_resume -> script.m5dial_denon_spotify_resume"
+      - homeassistant.action:
+          action: script.turn_on
+          data:
+            entity_id: script.m5dial_denon_spotify_resume
+  - id: do_play_pause
+    then:
+      - logger.log: "do_play_pause -> media_player.media_play_pause denon_2"
+      - homeassistant.action:
+          action: media_player.media_play_pause
+          data:
+            entity_id: media_player.denon_2
+  - id: media_long
+    then:
+      - lambda: |-
+          std::string avr = id(ha_avr_state).state;
+          std::string heos = id(ha_heos_state).state;
+          bool avr_on = !(avr == "off" || avr == "unavailable" || avr.empty());
+          bool heos_active = (heos == "playing" || heos == "paused" || heos == "buffering");
+          ESP_LOGD("m5dial", "media_long avr=%s heos=%s -> %s",
+                   avr.c_str(), heos.c_str(), (avr_on || heos_active) ? "turn_off" : "noop");
+          if (avr_on || heos_active) { id(do_avr_off).execute(); }
+  - id: do_avr_off
+    then:
+      - logger.log: "do_avr_off -> media_player.turn_off denon"
+      - homeassistant.action:
+          action: media_player.turn_off
+          data:
+            entity_id: media_player.denon
+
 interval:
   - interval: 1s
     then:
@@ -437,6 +538,12 @@ lvgl:
             y: -6
             src: img_plex
             hidden: true
+        - image:
+            id: l_appletv
+            align: CENTER
+            y: -6
+            src: img_appletv
+            hidden: true
         - button:
             id: m_btn_prev
             align: CENTER
@@ -449,6 +556,12 @@ lvgl:
             shadow_width: 0
             pad_all: 0
             text_color: 0xFFFFFF
+            on_click:
+              - logger.log: "btn PREV touched"
+              - homeassistant.action:
+                  action: media_player.media_previous_track
+                  data:
+                    entity_id: media_player.denon_2
             widgets:
               - label: { align: CENTER, text: "", text_font: montserrat_20 }
         - button:
@@ -463,6 +576,9 @@ lvgl:
             shadow_width: 0
             pad_all: 0
             text_color: 0xFFFFFF
+            on_click:
+              - logger.log: "btn PLAY touched"
+              - script.execute: do_play_pause
             widgets:
               - label: { id: m_play_icon, align: CENTER, text: "", text_font: montserrat_22 }
         - button:
@@ -477,6 +593,12 @@ lvgl:
             shadow_width: 0
             pad_all: 0
             text_color: 0xFFFFFF
+            on_click:
+              - logger.log: "btn NEXT touched"
+              - homeassistant.action:
+                  action: media_player.media_next_track
+                  data:
+                    entity_id: media_player.denon_2
             widgets:
               - label: { align: CENTER, text: "", text_font: montserrat_20 }
         - arc:
