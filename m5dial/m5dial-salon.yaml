@@ -83,6 +83,22 @@ sensor:
       - logger.log: "encoder CW"
     on_anticlockwise:
       - logger.log: "encoder CCW"
+  - platform: homeassistant
+    id: ha_volume
+    entity_id: media_player.denon
+    attribute: volume_level
+  - platform: homeassistant
+    id: ha_ac_target
+    entity_id: climate.air_conditioner
+    attribute: temperature
+  - platform: homeassistant
+    id: ha_ac_current
+    entity_id: climate.air_conditioner
+    attribute: current_temperature
+  - platform: homeassistant
+    id: ha_tado_target
+    entity_id: climate.living_room
+    attribute: temperature
 
 binary_sensor:
   - platform: gpio
@@ -110,6 +126,62 @@ binary_sensor:
           - OFF for at least 400ms
         then:
           - logger.log: "btn SINGLE"
+
+text_sensor:
+  - platform: homeassistant
+    id: ha_media_title
+    entity_id: media_player.denon_2
+    attribute: media_title
+  - platform: homeassistant
+    id: ha_media_artist
+    entity_id: media_player.denon_2
+    attribute: media_artist
+  - platform: homeassistant
+    id: ha_heos_state
+    entity_id: media_player.denon_2
+  - platform: homeassistant
+    id: ha_avr_source
+    entity_id: media_player.denon
+    attribute: source
+  - platform: homeassistant
+    id: ha_avr_state
+    entity_id: media_player.denon
+  - platform: homeassistant
+    id: ha_appletv_title
+    entity_id: media_player.apple_tv
+    attribute: media_title
+  - platform: homeassistant
+    id: ha_appletv_app
+    entity_id: media_player.apple_tv
+    attribute: app_name
+  - platform: homeassistant
+    id: ha_ac_state
+    entity_id: climate.air_conditioner
+  - platform: homeassistant
+    id: ha_ac_fan
+    entity_id: climate.air_conditioner
+    attribute: fan_mode
+  - platform: homeassistant
+    id: ha_ac_swing
+    entity_id: climate.air_conditioner
+    attribute: swing_mode
+  - platform: homeassistant
+    id: ha_season
+    entity_id: input_boolean.heating_season
+
+globals:
+  - id: current_screen          # 0 = media, 1 = climate
+    type: int
+    restore_value: false
+    initial_value: "0"
+  - id: pending_volume          # debounced target volume 0..1, -1 = idle
+    type: float
+    restore_value: false
+    initial_value: "-1"
+  - id: pending_temp            # debounced target temp, -100 = idle
+    type: float
+    restore_value: false
+    initial_value: "-100"
 
 lvgl:
   displays:
