@@ -328,6 +328,15 @@ binary_sensor:
           lv_label_set_text(id(c_offline), "\xEF\x81\xB1");
           show(id(m_offline), !x);
           show(id(c_offline), !x);
+  - platform: homeassistant
+    id: ha_lr_motion            # living-room presence -> wake the screen
+    entity_id: binary_sensor.lightsensorlivingroom_occupancy
+    on_state:
+      - if:
+          condition:
+            lambda: 'return x;'
+          then:
+            - script.execute: wake_now
 
 text_sensor:
   - platform: homeassistant
