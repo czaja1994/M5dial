@@ -2,7 +2,7 @@
 #
 # Source: automation.nspanel_salon  (HA instance 192.168.1.228)
 # Blueprint: edwardtfn/nspanel_easy_blueprint.yaml  (NSPanel Easy, 2026.6.2)
-# Exported: 2026-07-13
+# Exported: 2026-07-14
 #
 # To reproduce: import the NSPanel Easy blueprint, then create an automation
 # from it and paste these inputs (or drop this into automations via UI/MCP).
@@ -10,7 +10,8 @@
 #
 # Companion HA helpers (see ha_helpers.md) that this config depends on:
 #   switch.bedroom_room / switch.office_room  — smart room toggles (home tiles)
-#   light.salon_mood / salon_hue_tv / salon_gallery — salon zone groups (Salon page)
+#   light.evening_mood                        — salon+kitchen mood scene group
+#   light.office_mood                         — office desk/sofa/ball/printer group
 
 id: "1782826202411"
 alias: NSPanel Salon
@@ -51,67 +52,33 @@ use_blueprint:
     home_custom_button04_name: AC Office
     home_custom_button04_icon: mdi:air-conditioner
 
-    # --- Entity pages (☰ list icon on home -> slide pages of individual lights) ---
-    # 4 pages x up to 8 tiles; each light tile opens a brightness/colour popup.
-    entity_page01_label: Salon
+    # --- Entity pages (☰ list icon on home -> slide pages) ---
+    # Curated per room, NOT every bulb. Kitchen merged into Salon.
+    # Entity keys are GLOBAL sequential: page1=01-08, page2=09-16, page3=17-24, page4=25-32.
+    entity_page01_label: Salon                        # Salon + Kitchen as one room
     entities_entity01: light.shellyplus2pm_d48afc7e8694_switch_1   # BLACK Living Room
-    entities_entity01_name: Main
-    entities_entity02: light.salon_mood
-    entities_entity02_name: Mood
-    entities_entity03: light.salon_hue_tv
-    entities_entity03_name: Hue TV
-    entities_entity04: light.salon_gallery
-    entities_entity04_name: Gallery
-    entities_entity05: light.tv_led
-    entities_entity05_name: TV LED
-    entities_entity06: light.living_room              # HUE Led Strip
-    entities_entity06_name: Strip
-    entities_entity07: light.tv_entertainment
-    entities_entity07_name: Ambient
-    entities_entity08: light.denonmood
-    entities_entity08_name: Denon
+    entities_entity01_name: Main Salon
+    entities_entity02: light.shellyplus2pm_d48afc7e8694_switch_0   # BLACK Kitchen
+    entities_entity02_name: Main Kuch
+    entities_entity03: light.evening_mood             # MAP+moodlamp+sunset+countertop+salon HUE
+    entities_entity03_name: Evening Mood
 
     entity_page02_label: Sypialnia
-    entities_entity09: light.bedroom
-    entities_entity09_name: Bedroom
-    entities_entity10: light.shellybedroommain
-    entities_entity10_name: Main
-    entities_entity11: light.shellybedroomed
-    entities_entity11_name: LED
-    entities_entity12: light.bedroom_bed2
-    entities_entity12_name: Bed
-    entities_entity13: light.hue_ambiance_spot_1
-    entities_entity13_name: Bed LT
-    entities_entity14: light.hue_ambiance_spot_1_2
-    entities_entity14_name: Bed LB
-    entities_entity15: light.hue_ambiance_spot_1_3
-    entities_entity15_name: Bed RT
-    entities_entity16: light.hue_ambiance_spot_1_4
-    entities_entity16_name: Bed RB
+    entities_entity09: light.shellybedroommain
+    entities_entity09_name: Main
+    entities_entity10: light.shellybedroomed
+    entities_entity10_name: LED
+    entities_entity11: light.bedroom_bed2             # Hue group, driven by Adaptive Lighting
+    entities_entity11_name: Bed
 
     entity_page03_label: Biuro
-    entities_entity17: light.shellyswitch25_3c6105e3695d_channel_1  # MAIN
+    entities_entity17: light.shellyswitch25_3c6105e3695d_channel_1   # MAIN
     entities_entity17_name: Main
-    entities_entity18: light.yeelight_strip6_0x13f31f78             # Desktop
-    entities_entity18_name: Desktop
-    entities_entity19: light.hue_color_lamp_1                       # Ball
-    entities_entity19_name: Ball
-    entities_entity20: light.sofalampikea
-    entities_entity20_name: Sofa
-    entities_entity21: light.printerlamp
-    entities_entity21_name: Printer
-
-    entity_page04_label: Kuchnia
-    entities_entity25: light.shellyplus2pm_d48afc7e8694_switch_0    # BLACK Kitchen
-    entities_entity25_name: Main
-    entities_entity26: light.shelly1_e8db84802b9b                   # Island
-    entities_entity26_name: Island
-    entities_entity27: light.map
-    entities_entity27_name: Map
-    entities_entity28: light.sunset
-    entities_entity28_name: Sunset
-    entities_entity29: light.yeelight_strip6_0x1582d560             # Countertop Color
-    entities_entity29_name: Counter
+    entities_entity18: light.shellyswitch25_3c6105e3695d_channel_2   # OFFICE LED
+    entities_entity18_name: LED
+    entities_entity19: light.office_mood             # Desktop+Ball+Sofa+Printer
+    entities_entity19_name: Mood
+    # (page 4 / Kuchnia intentionally left empty — merged into Salon page 1)
 
     # --- Hardware buttons (relay decoupled: relay_X_local_fallback left OFF) ---
     # Right: living-room shades (normal cover, open/close toggle)

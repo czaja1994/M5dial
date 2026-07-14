@@ -21,15 +21,17 @@ only a chosen subset.
   `light.sofalampikea`, `light.hue_color_lamp_1` (Ball).  Office MAIN stays off.
 - **Turn off:** `light.turn_off` → `light.office_lights`
 
-## Light groups — Salon zones (Salon entity page)
+## Light groups — entity-page tiles (Group → light)
 
-Salon has ~15 lights; grouped into zones so they fit one page (Group → light).
+Curated, not every bulb. Kitchen is merged into the Salon page.
 
 | Group | Members |
 |-------|---------|
-| `light.salon_mood` | `light.mood_top`, `light.mood_mid`, `light.mood_bottom`, `light.moodlamp` |
-| `light.salon_hue_tv` | `light.hue_play_1`, `light.hue_play_2`, `light.hue_play_right`, `light.hue_play_2_left` |
-| `light.salon_gallery` | `light.shelly1_8caab561c0e6` (Gallery), `light.shelly1_e8db84a92cb1` (LED LR), `light.shelly1_e8db84a92cb1_2` (LED) |
+| `light.evening_mood` | `light.map`, `light.moodlamp`, `light.sunset`, `light.yeelight_strip6_0x1582d560` (Countertop), `light.hue_play_1`, `light.hue_play_2`, `light.hue_play_right`, `light.hue_play_2_left`, `light.living_room` (HUE Strip) — the "Glitz and glam" set |
+| `light.office_mood` | `light.yeelight_strip6_0x13f31f78` (Desktop), `light.hue_color_lamp_1` (Ball), `light.sofalampikea` (Sofa), `light.printerlamp` (Printer) |
+
+Bedroom "Bed" tile uses the existing Hue group `light.bedroom_bed2` (driven by Adaptive
+Lighting), so no extra group is needed there.
 
 ## Screen wake on motion
 
