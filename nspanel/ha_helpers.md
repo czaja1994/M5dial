@@ -33,6 +33,12 @@ Curated, not every bulb. Kitchen is merged into the Salon page.
 Bedroom "Bed" tile uses the existing Hue group `light.bedroom_bed2` (driven by Adaptive
 Lighting), so no extra group is needed there.
 
+## Screen-off timeout (kept in sync with the M5Dial)
+
+NSPanel device numbers (runtime, persisted on the panel — not in the blueprint):
+`number.nspanel_salon_timeout_sleep = 30` (screen off), matching the M5Dial's
+30s `backlight_idle`. `timeout_dimming` stays at 30; `display_brightness_sleep = 0`.
+
 ## Screen wake on motion
 
 - **NSPanel:** blueprint input `wake_up_sensors: [binary_sensor.lightsensorlivingroom_occupancy]`.
