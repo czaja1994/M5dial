@@ -21,7 +21,11 @@ description: ""
 use_blueprint:
   path: edwardtfn/nspanel_easy_blueprint.yaml
   input:
-    nspanel_name: 5db51b2d312b23044bce118ff8b866ac   # device: nspanel-salon
+    # ESPHome device of the panel. 2026-10: HA split the old merged device
+    # (5db51b2d...) into one-per-integration (ESPHome + UniFi) -> the old id
+    # vanished and the panel-event trigger silently stopped firing (no boot
+    # init, no page renders). Must point at the ESPHome device:
+    nspanel_name: 5619a995d693fad6fd46b46fcea12849   # device: NSPanel Salon (esphome)
 
     # --- Screensaver / home ---
     weather_entity: weather.home
