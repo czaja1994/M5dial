@@ -1,8 +1,9 @@
 # NSPanel Salon — blueprint automation (as-built export from HA)
 #
 # Source: automation.nspanel_salon  (HA instance 192.168.1.228)
-# Blueprint: edwardtfn/nspanel_easy_blueprint.yaml  (NSPanel Easy, 2026.6.2)
-# Exported: 2026-07-14
+# Blueprint: edwardtfn/nspanel_easy_blueprint.yaml  (NSPanel Easy, 2026.10.0)
+# Exported: 2026-10-05
+# Firmware MUST match: ESPHome package ref v2026.10.0, TFT 21.6 (older firmware -> blueprint stops)
 #
 # To reproduce: import the NSPanel Easy blueprint, then create an automation
 # from it and paste these inputs (or drop this into automations via UI/MCP).
@@ -12,6 +13,7 @@
 #   switch.bedroom_room / switch.office_room  — smart room toggles (home tiles)
 #   light.evening_mood                        — salon+kitchen mood scene group
 #   light.office_mood                         — office desk/sofa/ball/printer group
+#   switch.denon_atv / _ps5 / _heos           — Denon source tiles (button page 1)
 
 id: "1782826202411"
 alias: NSPanel Salon
@@ -72,13 +74,31 @@ use_blueprint:
     entities_entity11_name: Bed
 
     entity_page03_label: Biuro
-    entities_entity17: light.shellyswitch25_3c6105e3695d_channel_1   # MAIN
+    entities_entity17: light.shelly_office_main
     entities_entity17_name: Main
-    entities_entity18: light.shellyswitch25_3c6105e3695d_channel_2   # OFFICE LED
+    entities_entity18: light.shelly_office_led
     entities_entity18_name: LED
     entities_entity19: light.office_mood             # Desktop+Ball+Sofa+Printer
     entities_entity19_name: Mood
     # (page 4 / Kuchnia intentionally left empty — merged into Salon page 1)
+
+    # --- Button page 1: Media (grid tiles) ---
+    # Only the 3 Denon sources we use (not the AVR's full 13-item source list).
+    # Tile lit = AVR on AND on that source; tap unlit -> power on + switch source;
+    # tap lit -> AVR off.
+    button_page01_label: Media
+    entity01: switch.denon_atv
+    entity01_name: Apple TV
+    entity01_icon: mdi:apple
+    entity02: switch.denon_ps5
+    entity02_name: PS5
+    entity02_icon: mdi:sony-playstation
+    entity03: switch.denon_heos
+    entity03_name: HEOS
+    entity03_icon: mdi:music
+    entity04: vacuum.roborock_s8_pro_ultra            # opens the vacuum page (start/dock/status)
+    entity04_name: Robot
+    entity04_icon: mdi:robot-vacuum
 
     # --- Hardware buttons (relay decoupled: relay_X_local_fallback left OFF) ---
     # Right: living-room shades (normal cover, open/close toggle)

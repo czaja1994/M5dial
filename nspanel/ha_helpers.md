@@ -21,6 +21,13 @@ only a chosen subset.
   `light.sofalampikea`, `light.hue_color_lamp_1` (Ball).  Office MAIN stays off.
 - **Turn off:** `light.turn_off` → `light.office_lights`
 
+### `switch.denon_atv` / `switch.denon_ps5` / `switch.denon_heos`  (Template → switch)
+Denon source tiles on button page 1 ("Media"). Sources: `APPLE TV`, `PlayStation 5`, `HEOS Music`.
+- **State:** `{{ is_state('media_player.denon','on') and is_state_attr('media_player.denon','source','<SOURCE>') }}`
+- **Turn on:** if `media_player.denon` is off → `media_player.turn_on` + 3s delay; then
+  `media_player.select_source` → `<SOURCE>`
+- **Turn off:** `media_player.turn_off` → `media_player.denon` (tap the lit tile = AVR off)
+
 ## Light groups — entity-page tiles (Group → light)
 
 Curated, not every bulb. Kitchen is merged into the Salon page.
